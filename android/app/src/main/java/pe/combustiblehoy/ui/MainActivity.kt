@@ -6,12 +6,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -43,10 +48,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    NEARBY("Cercanos", Icons.Filled.LocationOn),
-    FAVORITES("Favoritos", Icons.Filled.Star),
-    SETTINGS("Ajustes", Icons.Filled.Settings),
+private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
+    NEARBY("Cercanos", Icons.Outlined.Explore, Icons.Filled.Explore),
+    FAVORITES("Mis grifos", Icons.Outlined.StarOutline, Icons.Filled.Star),
+    SETTINGS("Ajustes", Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
 @Composable
@@ -62,21 +67,23 @@ private fun Root(vm: MainViewModel) {
         return
     }
     var tab by rememberSaveable { mutableIntStateOf(Tab.FAVORITES.ordinal) }
+    // Cada pantalla maneja su barra superior (y el inset de la barra de estado); aquí solo la navegación.
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t.ordinal,
                         onClick = { tab = t.ordinal },
-                        icon = { Icon(t.icon, contentDescription = null) },
-                        label = { Text(t.label) },
+                        icon = { Icon(if (tab == t.ordinal) t.selectedIcon else t.icon, contentDescription = null) },
+                        label = { Text(t.label, maxLines = 1) },
                     )
                 }
             }
         },
     ) { padding ->
-        Box(Modifier.padding(padding)) {
+        Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
             when (Tab.entries[tab]) {
                 Tab.NEARBY -> NearbyScreen(vm, s)
                 Tab.FAVORITES -> FavoritesScreen(vm, s, onAddFavorites = { tab = Tab.NEARBY.ordinal })

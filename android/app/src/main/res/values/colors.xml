@@ -2,4 +2,18 @@
 <resources>
     <color name="brand">#FF0B6E4F</color>
     <color name="ic_launcher_background">#FF0B6E4F</color>
+
+    <!-- Ventana (evita el destello blanco/negro al abrir la app). -->
+    <color name="window_background">#FFF5FBF7</color>
+
+    <!-- Widget: mismos tonos que BrandLight/BrandDark en ui/theme/Theme.kt. -->
+    <color name="widget_background">#FFF5FBF7</color>
+    <color name="widget_row">#FFDBE5DE</color>
+    <color name="widget_best">#FFB4F1D3</color>
+    <color name="widget_on_best">#FF002115</color>
+    <color name="widget_primary">#FF0B6E4F</color>
+    <color name="widget_on_primary">#FFFFFFFF</color>
+    <color name="widget_text">#FF171D1A</color>
+    <color name="widget_text_variant">#FF404944</color>
+    <color name="widget_down">#FF1B6C2F</color>
 </resources>
