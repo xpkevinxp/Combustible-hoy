@@ -104,7 +104,7 @@ def discover(code: str, out_dir: Path) -> None:
         page = browser.new_page(locale="es-PE")
         try:
             _capture_department(page, code)
-            responses = _capture_map(page, code)
+            responses = _capture_map(page, code) + _capture_map(page, code, producto="126")
         finally:
             browser.close()
     for i, r in enumerate(responses):
@@ -113,6 +113,9 @@ def discover(code: str, out_dir: Path) -> None:
         print(f"[{i:02d}] {r['method']} {r['status']} {r['ctype']} {r['url']} post={r['post']!r} len={len(r['body'])}")
         if ext == "json":
             print("     ", r["body"][:3000].replace("\n", " "))
+        elif r["method"] == "PAGE" and "MapaAction" in r["url"]:
+            import re
+            print("      HTML", re.sub(r"\s+", " ", r["body"])[:14000])
         elif r["method"] in ("PAGE", "POST"):
             _print_page_structure(r["body"])
 
