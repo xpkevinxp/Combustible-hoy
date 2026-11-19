@@ -1,6 +1,7 @@
 package pe.combustiblehoy.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -104,5 +105,13 @@ class CoreTest {
         val m = mapOf("GHR" to 15.39, "GLP" to 7.99)
         assertEquals(m, DataJson.decodePrices(DataJson.encodePrices(m)))
         assertEquals(emptyMap<String, Double>(), DataJson.decodePrices("not json"))
+    }
+
+    @Test
+    fun detectsStaleData() {
+        val now = java.time.LocalDateTime.of(2026, 11, 19, 12, 0)
+        assertFalse(Dates.isStale("2026-11-19T08:30", now))
+        assertTrue(Dates.isStale("2026-11-17T08:30", now))
+        assertFalse(Dates.isStale("", now))
     }
 }

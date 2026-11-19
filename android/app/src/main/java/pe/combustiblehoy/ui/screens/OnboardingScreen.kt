@@ -91,5 +91,10 @@ fun OnboardingScreen(vm: MainViewModel) {
                 }
             },
         ) { Text("Empezar") }
+        Text(
+            Legal.DISCLAIMER,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

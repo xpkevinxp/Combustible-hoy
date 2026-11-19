@@ -48,6 +48,14 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
             }
             IconButton(onClick = { vm.refreshAll() }) { Icon(Icons.Filled.Refresh, contentDescription = "Actualizar") }
         }
+        if (Dates.isStale(settings.lastDataDate)) {
+            Text(
+                "⚠ Los datos tienen más de un día (${Dates.pretty(settings.lastDataDate)}). Toca actualizar o revisa tu conexión.",
+                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         FuelChips(settings.fuel, vm::setFuel, Modifier.padding(vertical = 8.dp))
 
         if (sorted.isEmpty()) {

@@ -72,6 +72,18 @@ cd android
 ```
 Requiere JDK 17 y Android SDK 35. El workflow **Android CI** compila y sube el APK como artefacto en cada push.
 
+### 3. Publicar en Google Play
+1. **Keystore (una sola vez, guárdalo en un lugar seguro; si se pierde no podrás actualizar la app):**
+   ```bash
+   keytool -genkeypair -v -keystore combustible-hoy.jks -alias combustiblehoy \
+     -keyalg RSA -keysize 4096 -validity 10000
+   base64 -w0 combustible-hoy.jks > keystore.b64     # en macOS: base64 -i combustible-hoy.jks
+   ```
+2. **Settings → Secrets and variables → Actions → Secrets**: `KEYSTORE_BASE64` (contenido de `keystore.b64`), `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`combustiblehoy`), `KEY_PASSWORD`.
+3. **Versión**: `git tag v1.0.0 && git push origin v1.0.0` → el workflow **Android Release** genera el `.aab` (artefacto, para Play) y un GitHub Release con el `.apk`. `versionCode` = número de ejecución.
+4. **Play Console**: crea la app, activa *Play App Signing* y sube el `.aab`. Textos, declaraciones y gráficos listos en [`store/`](store/ficha-play.md). Política de privacidad: `https://xpkevinxp.github.io/Combustible-hoy/privacidad.html` (se publica desde `docs/` junto con los datos).
+5. Cuentas personales nuevas: prueba cerrada con ≥ 12 testers durante 14 días antes de pedir producción.
+
 ## Formato de datos publicado
 
 | Archivo | Contenido |

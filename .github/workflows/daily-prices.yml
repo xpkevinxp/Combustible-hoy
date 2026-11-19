@@ -63,6 +63,9 @@ jobs:
             python -m combustible --site ../site
           fi
 
+      - name: Páginas estáticas (política de privacidad)
+        run: cp -r docs/. site/
+
       - name: Publicar en GitHub Pages (rama gh-pages)
         uses: peaceiris/actions-gh-pages@v4
         with:

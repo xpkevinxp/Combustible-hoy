@@ -25,6 +25,12 @@ object Dates {
         return if (hasTime) "${dt.format(dayMonth)} ${dt.format(hourMinute)}" else dt.format(dayMonth)
     }
 
+    /** true si el último dato publicado tiene más de [maxHours] horas (el pipeline podría estar fallando). */
+    fun isStale(text: String?, now: LocalDateTime = LocalDateTime.now(), maxHours: Long = 24): Boolean {
+        val dt = parse(text) ?: return false
+        return ChronoUnit.HOURS.between(dt, now) > maxHours
+    }
+
     fun daysAgo(text: String?, today: LocalDate = LocalDate.now()): Long? =
         parse(text)?.toLocalDate()?.let { ChronoUnit.DAYS.between(it, today) }
 

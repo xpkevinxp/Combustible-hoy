@@ -128,7 +128,7 @@ class FavoritesWidget : GlanceAppWidget() {
             if (state.date.isNotBlank()) {
                 Spacer(GlanceModifier.defaultWeight())
                 Text(
-                    text = "Osinergmin · ${Dates.pretty(state.date)}",
+                    text = (if (Dates.isStale(state.date)) "⚠ " else "") + "Osinergmin · ${Dates.pretty(state.date)}",
                     style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 10.sp),
                     maxLines = 1,
                 )

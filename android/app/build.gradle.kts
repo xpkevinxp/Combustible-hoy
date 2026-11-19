@@ -6,6 +6,12 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Firma release: variables de entorno (CI, desde GitHub Secrets) o propiedades de Gradle.
+fun secret(name: String): String? =
+    (System.getenv(name) ?: project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+
+val releaseKeystore = secret("KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+
 android {
     namespace = "pe.combustiblehoy"
     compileSdk = 35
@@ -14,8 +20,9 @@ android {
         applicationId = "pe.combustiblehoy"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // En CI: -PversionCode=<github.run_number> -PversionName=<tag sin "v">
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "0.1.0"
 
         // URL de GitHub Pages donde el workflow diario publica los JSON.
         // Se puede cambiar con -PdataBaseUrl=https://.../
@@ -24,12 +31,24 @@ android {
         buildConfigField("String", "DATA_BASE_URL", "\"$dataBaseUrl\"")
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = secret("KEYSTORE_PASSWORD")
+                keyAlias = secret("KEY_ALIAS")
+                keyPassword = secret("KEY_PASSWORD") ?: secret("KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Firma de debug para poder instalar el APK release de prueba; reemplazar por una keystore real.
-            signingConfig = signingConfigs.getByName("debug")
+            // Sin keystore (p.ej. CI de PRs) se firma con la clave de debug para poder instalarlo de prueba.
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
