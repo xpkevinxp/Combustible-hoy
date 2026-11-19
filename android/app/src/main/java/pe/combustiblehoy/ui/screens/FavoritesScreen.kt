@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.data.UserSettings
 import pe.combustiblehoy.data.delta
 import pe.combustiblehoy.data.price
@@ -39,13 +40,21 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                 Text("Mis grifos", style = MaterialTheme.typography.titleLarge)
                 if (settings.lastDataDate.isNotBlank()) {
                     Text(
-                        "Precios declarados al ${settings.lastDataDate}",
+                        "Osinergmin · actualizado ${Dates.pretty(settings.lastDataDate)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             IconButton(onClick = { vm.refreshAll() }) { Icon(Icons.Filled.Refresh, contentDescription = "Actualizar") }
+        }
+        if (Dates.isStale(settings.lastDataDate)) {
+            Text(
+                "⚠ Los datos tienen más de un día (${Dates.pretty(settings.lastDataDate)}). Toca actualizar o revisa tu conexión.",
+                Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
         FuelChips(settings.fuel, vm::setFuel, Modifier.padding(vertical = 8.dp))
 
@@ -63,6 +72,7 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                         price = fav.price(settings.fuel),
                         delta = fav.delta(settings.fuel),
                         distanceKm = null,
+                        updated = fav.updated,
                         isFavorite = true,
                         onToggleFavorite = { vm.removeFavorite(fav.id) },
                         onDirections = { openDirections(context, fav.lat, fav.lon, fav.name, fav.address) },

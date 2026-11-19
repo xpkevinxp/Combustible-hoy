@@ -39,7 +39,7 @@ import pe.combustiblehoy.ui.MainViewModel
 fun OnboardingScreen(vm: MainViewModel) {
     val departments by vm.departments.collectAsStateWithLifecycle()
     val location by vm.location.collectAsStateWithLifecycle()
-    var fuel by remember { mutableStateOf(Fuel.G90) }
+    var fuel by remember { mutableStateOf(Fuel.GHR) }
     var dept by remember { mutableStateOf("lima") }
 
     LaunchedEffect(location, departments) {
@@ -63,7 +63,7 @@ fun OnboardingScreen(vm: MainViewModel) {
         Text("Combustible Hoy", style = MaterialTheme.typography.headlineMedium)
         Text(
             "Mira el precio de tu combustible en tus grifos favoritos, directo en tu pantalla de inicio. " +
-                "Datos declarados por los establecimientos ante Osinergmin, actualizados a diario.",
+                "Precios declarados por los grifos ante Osinergmin, actualizados varias veces al día.",
             style = MaterialTheme.typography.bodyLarge,
         )
 
@@ -91,5 +91,10 @@ fun OnboardingScreen(vm: MainViewModel) {
                 }
             },
         ) { Text("Empezar") }
+        Text(
+            Legal.DISCLAIMER,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

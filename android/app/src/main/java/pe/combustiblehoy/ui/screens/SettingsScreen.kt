@@ -12,13 +12,17 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.combustiblehoy.BuildConfig
+import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.data.UserSettings
 import pe.combustiblehoy.ui.MainViewModel
 import java.text.DateFormat
@@ -30,6 +34,7 @@ private val THRESHOLDS = listOf(0.05, 0.10, 0.20, 0.50)
 @Composable
 fun SettingsScreen(vm: MainViewModel, settings: UserSettings) {
     val departments by vm.departments.collectAsStateWithLifecycle()
+    val uri = LocalUriHandler.current
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -60,14 +65,34 @@ fun SettingsScreen(vm: MainViewModel, settings: UserSettings) {
         Section("Datos")
         Text(
             buildString {
-                append("Fuente: precios declarados por los establecimientos ante Osinergmin (datos abiertos). ")
-                append("Pueden diferir del precio en surtidor; verifica antes de cargar.\n\n")
-                if (settings.lastDataDate.isNotBlank()) append("Datos del: ${settings.lastDataDate}\n")
+                append("Fuente: Osinergmin – SCOP, \"Últimos precios registrados\" por los establecimientos de venta al público. ")
+                append("Cada grifo declara su precio; algunos no lo actualizan seguido (se muestra la antigüedad). ")
+                append("La ubicación viene del mapa de Facilito (o es aproximada por distrito si no está). Verifica el precio en el surtidor.\n\n")
+                if (settings.lastDataDate.isNotBlank()) append("Datos al: ${Dates.pretty(settings.lastDataDate)}\n")
                 if (settings.lastSyncAt > 0) {
                     append("Última sincronización: ")
                     append(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(settings.lastSyncAt)))
                 }
             },
+            Modifier.padding(horizontal = 16.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        HorizontalDivider()
+        Section("Acerca de")
+        Text(
+            Legal.DISCLAIMER,
+            Modifier.padding(horizontal = 16.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.padding(horizontal = 8.dp)) {
+            TextButton(onClick = { uri.openUri(Legal.PRIVACY_URL) }) { Text("Política de privacidad") }
+            TextButton(onClick = { uri.openUri(Legal.SOURCE_URL) }) { Text("Fuente de datos") }
+        }
+        Text(
+            "Versión ${BuildConfig.VERSION_NAME}",
             Modifier.padding(horizontal = 16.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

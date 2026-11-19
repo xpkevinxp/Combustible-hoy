@@ -41,6 +41,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import pe.combustiblehoy.R
 import pe.combustiblehoy.app
+import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.core.Fuel
 import pe.combustiblehoy.core.PriceAlerts
 import pe.combustiblehoy.data.FavoriteEntity
@@ -127,7 +128,7 @@ class FavoritesWidget : GlanceAppWidget() {
             if (state.date.isNotBlank()) {
                 Spacer(GlanceModifier.defaultWeight())
                 Text(
-                    text = "Datos Osinergmin · ${state.date}",
+                    text = (if (Dates.isStale(state.date)) "⚠ " else "") + "Osinergmin · ${Dates.pretty(state.date)}",
                     style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 10.sp),
                     maxLines = 1,
                 )

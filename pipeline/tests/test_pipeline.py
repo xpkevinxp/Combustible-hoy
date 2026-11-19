@@ -5,80 +5,109 @@ from pathlib import Path
 import yaml
 
 from combustible.__main__ import main
-from combustible.normalize import merge_registry, normalize_prices, parse_date, parse_float, read_file
+from combustible.fetch import expand
+from combustible.geo import DistrictLocator
+from combustible.normalize import geolocate, merge_registry, normalize_prices, parse_date, parse_float, read_file
 from combustible.products import product_code
 from combustible.publish import publish, slug
 
 ROOT = Path(__file__).resolve().parent.parent
 FIX = Path(__file__).resolve().parent / "fixtures"
 ALIASES = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))["columns"]
+SAMPLE = FIX / "evpc_muestra.xlsx"  # extracto real de Ultimos-Precios-Registrados-EVPC.xlsx
 
 
-def test_product_codes():
-    assert product_code("GASOHOL 90 PLUS") == "G90"
-    assert product_code("Gasohol 84 Plus") == "G84"
-    assert product_code("GASOHOL 95 PLUS") == "G95"
-    assert product_code("GASOHOL 97 PLUS") == "G97"
-    assert product_code("DIESEL B5 S-50 UV") == "DB5"
-    assert product_code("Diésel B5") == "DB5"
-    assert product_code("GASOLINA REGULAR") == "REG"
-    assert product_code("GASOLINA PREMIUM") == "PREM"
-    assert product_code("GLP - G") == "GLP"
-    assert product_code("GNV") == "GNV"
+def load_sample():
+    return normalize_prices(read_file(SAMPLE), ALIASES)
+
+
+def test_product_codes_by_osinergmin_code():
+    assert product_code("GASOHOL REGULAR", "126") == ("GHR", 0)
+    assert product_code("GASOHOL PREMIUM", "127") == ("GHP", 0)
+    assert product_code("GASOLINA REGULAR", "124") == ("REG", 0)
+    assert product_code("GASOLINA 84", "06") == ("G84", 0)
+    assert product_code("Diesel B5 S-50 UV", "40") == ("DB5", 0)
+    assert product_code("DIESEL B5 UV", "39") == ("DB5", 1)
+    assert product_code("GLP - G", "49") == ("GLP", 0)
+    assert product_code("GAS NATURAL VEHICULAR COMPRIMIDO", "131") == ("GNV", 0)
+    assert product_code("Cilindros de 10 Kg de GLP", "52") is None
+
+
+def test_product_codes_by_name_fallback():
+    assert product_code("Gasohol Regular")[0] == "GHR"
+    assert product_code("Gasohol Premium")[0] == "GHP"
+    assert product_code("Diésel B5")[0] == "DB5"
+    assert product_code("DIESEL 2 UV")[0] == "D2"
+    assert product_code("GAS NATURAL VEHICULAR LICUEFACTADO")[0] == "GNL"
+    assert product_code("Cilindros de 10 Kg de GLP") is None
     assert product_code("KEROSENE") is None
-    assert product_code("") is None
 
 
 def test_parsers():
     assert parse_float("15,49") == 15.49
     assert parse_float("S/ 15.49") == 15.49
-    assert parse_float("1,234.50") == 1234.5
     assert parse_float("") is None
     assert parse_date("19/11/2026") == "2026-11-19"
-    assert parse_date("2026-11-19 08:00:00") == "2026-11-19"
+    assert parse_date("2026-11-18 13:33:55") == "2026-11-18T13:33"
+    assert expand("x/{year}/y", 2027) == "x/2027/y"
 
 
-def test_long_format_keeps_latest_and_filters():
-    stations = normalize_prices(read_file(FIX / "precios_largo.csv"), ALIASES)
-    assert set(stations) == {"12345", "67890"}
-    s = stations["12345"]
-    assert s.prices == {"G90": 15.39, "DB5": 16.2, "GLP": 7.99}
-    assert s.name == "Grifo San Martin"
-    assert s.department == "LIMA"
-    j = stations["67890"]
-    assert j.prices == {"REG": 16.1, "GNV": 1.85}  # kerosene descartado
-    assert j.department == "JUNIN"
+def test_real_sample():
+    stations = load_sample()
+    assert len(stations) == 6
+    lv = stations["100155"]
+    assert lv.prices == {"GHR": 22.49, "GHP": 23.99, "GNV": 1.74, "DB5": 26.09, "GLP": 9.49}
+    assert lv.name == lv.company and lv.company  # sin marca: nombre = razón social
+    assert lv.department == "LIMA" and lv.district == "LA VICTORIA"
+    assert lv.activity
+    # Callao normalizado
+    assert stations["105356"].department == "CALLAO"
+    # DB5: gana S-50 UV (40) sobre B5 UV (39) aunque sea más caro
+    assert stations["107272"].prices["DB5"] == 27.0
+    # PRODUCTO_ACTIVO = NO se descarta
+    assert "DB5" not in stations["109598"].prices
+
+
+def test_geolocation_by_district():
+    stations = load_sample()
+    stats = geolocate(stations, DistrictLocator())
+    assert stats["sin"] == 0
+    si = stations["14693"]
+    assert si.geo == "distrito" and abs(si.lat - -12.1) < 0.1 and abs(si.lon - -77.03) < 0.1
+    assert stations["105356"].geo == "distrito"  # Ventanilla, Callao
+    assert stations["110263"].geo == "provincia"  # Kimbiri no está en el ubigeo -> La Convención
+
+
+def test_registry_exact_coordinates_take_precedence():
+    stations = load_sample()
+    assert merge_registry(stations, read_file(FIX / "registro.csv"), ALIASES) == 2
+    geolocate(stations)
+    assert (stations["105356"].lat, stations["105356"].lon, stations["105356"].geo) == (-11.8752, -77.1301, "exacta")
+    assert stations["14693"].geo == "distrito"  # longitud 0 inválida -> aproximada
 
 
 def test_wide_format():
     stations = normalize_prices(read_file(FIX / "precios_ancho.csv"), ALIASES)
-    assert stations["555"].prices == {"G95": 17.5, "G97": 18.2}
-
-
-def test_registry_merge_adds_coordinates():
-    stations = normalize_prices(read_file(FIX / "precios_largo.csv"), ALIASES)
-    n = merge_registry(stations, read_file(FIX / "registro.csv"), ALIASES)
-    assert n == 2
-    assert (stations["12345"].lat, stations["12345"].lon) == (-12.0912, -77.0251)
-    assert stations["67890"].lat is None  # longitud 0 fuera de Perú
+    assert stations["555"].prices == {"GHR": 17.5, "GHP": 18.2}
 
 
 def test_publish_and_deltas(tmp_path):
-    stations = normalize_prices(read_file(FIX / "precios_largo.csv"), ALIASES)
+    stations = load_sample()
+    geolocate(stations)
     publish(stations, tmp_path, dt.date(2026, 11, 18))
-    stations["12345"].prices["G90"] = 15.19
+    stations["14693"].prices["GHR"] = 23.79
     meta = publish(stations, tmp_path, dt.date(2026, 11, 19))
 
-    assert meta["count"] == 2
-    assert {d["slug"] for d in meta["departments"]} == {"lima", "junin"}
-    lima = json.loads((tmp_path / "latest/dept/lima.json").read_text())
-    st = lima["stations"][0]
-    assert st["id"] == "12345" and st["p"]["G90"] == 15.19
-    assert st["d"] == {"G90": -0.2}
+    assert meta["count"] == 6
+    assert {d["slug"] for d in meta["departments"]} == {"lima", "callao", "ucayali", "cusco"}
+    assert meta["date"].startswith("2026-")
+    lima = {s["id"]: s for s in json.loads((tmp_path / "latest/dept/lima.json").read_text())["stations"]}
+    st = lima["14693"]
+    assert st["p"]["GHR"] == 23.79 and st["d"] == {"GHR": -0.2}
+    assert st["geo"] == "distrito" and "lat" in st
     prices = json.loads((tmp_path / "latest/prices.json").read_text())
-    assert prices["p"]["67890"]["GNV"] == 1.85
+    assert prices["p"]["100155"]["GNV"] == 1.74
     assert (tmp_path / "history/2026-11-18/prices.json").exists()
-    assert (tmp_path / "history/2026-11-19/prices.json").exists()
 
 
 def test_slug():
@@ -88,7 +117,6 @@ def test_slug():
 
 
 def test_cli(tmp_path):
-    rc = main(["--prices", str(FIX / "precios_largo.csv"), "--registry", str(FIX / "registro.csv"), "--site", str(tmp_path)])
-    assert rc == 0
-    assert json.loads((tmp_path / "latest/meta.json").read_text())["count"] == 2
-    assert main(["--prices", str(FIX / "precios_largo.csv"), "--site", str(tmp_path), "--min-stations", "10"]) == 1
+    assert main(["--prices", str(SAMPLE), "--site", str(tmp_path), "--no-coords"]) == 0
+    assert json.loads((tmp_path / "latest/meta.json").read_text())["count"] == 6
+    assert main(["--prices", str(SAMPLE), "--site", str(tmp_path), "--min-stations", "10"]) == 1

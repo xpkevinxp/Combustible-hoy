@@ -108,10 +108,14 @@ class PriceRepository(
         for (fav in favorites) {
             val newPrices = prices.p[fav.id] ?: continue
             val old = fav.prices()
-            if (newPrices == old) continue // sin cambios: se conserva la última variación conocida
+            val stationDate = prices.u[fav.id] ?: fav.updated
+            if (newPrices == old) { // sin cambios: se conserva la última variación conocida
+                if (stationDate != fav.updated) db.favorites().updatePrices(fav.id, fav.pricesJson, fav.deltasJson, stationDate)
+                continue
+            }
             val deltas = newPrices.filter { (k, v) -> old[k] != null && kotlin.math.abs(v - old[k]!!) >= 0.005 }
                 .mapValues { (k, v) -> v - old[k]!! }
-            db.favorites().updatePrices(fav.id, DataJson.encodePrices(newPrices), DataJson.encodePrices(deltas), prices.date)
+            db.favorites().updatePrices(fav.id, DataJson.encodePrices(newPrices), DataJson.encodePrices(deltas), stationDate)
         }
         settings.markSynced(meta.date)
         return SyncResult(meta.date, changes, updated = true)

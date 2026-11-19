@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 y anteriores: respaldar solo favoritos y ajustes; la caché de precios se vuelve a descargar. -->
+<full-backup-content>
+    <include domain="database" path="combustible.db" />
+    <include domain="file" path="datastore/settings.preferences_pb" />
+</full-backup-content>

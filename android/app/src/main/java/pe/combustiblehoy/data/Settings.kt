@@ -18,7 +18,7 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 
 data class UserSettings(
     val onboarded: Boolean = false,
-    val fuel: Fuel = Fuel.G90,
+    val fuel: Fuel = Fuel.GHR,
     val department: String = "lima",
     val radiusKm: Int = 5,
     val alertsEnabled: Boolean = true,
@@ -47,7 +47,7 @@ class SettingsStore(private val context: Context) {
 
     private fun Preferences.toSettings() = UserSettings(
         onboarded = this[K.onboarded] ?: false,
-        fuel = Fuel.fromCode(this[K.fuel]) ?: Fuel.G90,
+        fuel = Fuel.fromCode(this[K.fuel]) ?: Fuel.GHR,
         department = this[K.department] ?: "lima",
         radiusKm = this[K.radius] ?: 5,
         alertsEnabled = this[K.alerts] ?: true,

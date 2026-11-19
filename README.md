@@ -2,10 +2,10 @@
 
 Herramienta para conductores en Perú: un **widget Android** que muestra el precio de tu combustible favorito en tus grifos favoritos, con lista de **grifos cercanos** y **alertas** cuando cambia el precio.
 
-Los datos vienen de los precios que los establecimientos declaran ante **Osinergmin** (la misma fuente de *Facilito*), publicados como datos abiertos. Un proceso diario los descarga, los normaliza y los publica como JSON estáticos en GitHub Pages; la app solo lee esos JSON.
+Los datos vienen de los precios que los establecimientos declaran ante **Osinergmin** (la misma fuente de *Facilito*). Un proceso que corre cada 6 horas los descarga, los normaliza y los publica como JSON estáticos en GitHub Pages; la app solo lee esos JSON.
 
 ```
-Osinergmin (datos abiertos) ──► GitHub Actions (diario) ──► GitHub Pages (JSON) ──► App + widget Android
+Osinergmin (SCOP, Excel) ──► GitHub Actions (cada 6 h) ──► GitHub Pages (JSON) ──► App + widget Android
                                  pipeline/ (Python)          gh-pages                 android/ (Kotlin)
 ```
 
@@ -13,29 +13,57 @@ Osinergmin (datos abiertos) ──► GitHub Actions (diario) ──► GitHub P
 
 | Carpeta | Qué es |
 |---|---|
-| `pipeline/` | Proceso diario en Python: descarga, normaliza (CSV/XLSX/JSON, columnas por alias) y publica JSON. |
-| `.github/workflows/daily-prices.yml` | Corre el pipeline a las 8:00 y 17:00 (hora Lima) y publica en la rama `gh-pages`. |
+| `pipeline/` | Proceso en Python: descarga el Excel de Osinergmin, normaliza, ubica por distrito y publica JSON. |
+| `.github/workflows/daily-prices.yml` | Corre el pipeline cada 6 h y publica en la rama `gh-pages`. |
+| `.github/workflows/facilito-coords.yml` | Cada trimestre actualiza las coordenadas exactas desde Facilito (`pipeline/data/coordenadas.csv`). |
 | `android/core/` | Lógica pura en Kotlin (modelos, distancia, ranking, detección de cambios de precio) con tests. |
 | `android/app/` | App Compose + widget Glance + WorkManager (sincronización y notificaciones). |
 
+## Fuente de datos
+
+Osinergmin publica en SCOP dos Excel de **"Últimos precios registrados"**, actualizados ~cada 6 horas:
+
+| Archivo | Qué contiene | ¿Lo usa la app? |
+|---|---|---|
+| `Ultimos-Precios-Registrados-EVPC.xlsx` | **EVPC = Establecimientos de Venta al Público de Combustibles**: grifos, estaciones de servicio, gasocentros GLP/GNV, grifos rurales y flotantes. ~5.700 establecimientos, ~17.700 filas (una por establecimiento y producto). Es el precio que paga el conductor. | ✅ Sí |
+| `Ultimos-precios-registrados-DMAY.xlsx` | **DMAY = Distribuidores Mayoristas** (Petroperú, Repsol, Valero, Numay…): ~500 filas con el precio de venta a otras empresas (grifos, flotas). No es precio al público. | ❌ No (podría servir como referencia mayorista) |
+
+Columnas de ambos: `NRO_REGISTRO, RUC, RAZON, DEPARTAMENTO, PROVINCIA, DISTRITO, DIRECCION, FCHA_REGISTRO, COD_PRODUCTO, PRODUCTO, PRECIO_VENTA, UNIDAD, CODIGO_OSINERG, ACTIVIDAD, COD_ACTIVIDAD, MARCA` (+ `ULT_PRECIO_DIF_CERO, PRODUCTO_ACTIVO` en EVPC).
+
+Cómo se procesa:
+- **ID del grifo**: `CODIGO_OSINERG` (estable; `NRO_REGISTRO` cambia cuando se renueva el registro).
+- **Nombre**: `MARCA` casi siempre está vacía, así que se usa la razón social (`RAZON`) + dirección.
+- **Producto**: se mapea por `COD_PRODUCTO` (ver tabla abajo). Se descartan filas con `PRODUCTO_ACTIVO = NO` y los cilindros de GLP de 10 kg.
+- **Fecha**: `FCHA_REGISTRO` es cuándo el grifo declaró ese precio; hay precios de hace meses, por eso la app muestra la antigüedad.
+- **Ubicación**: el Excel **no trae coordenadas**. Se toman del mapa de **Facilito** (`MapaAction.do?method=getPoints`, JSON público), guardadas en `pipeline/data/coordenadas.csv` y actualizadas **cada trimestre** por el workflow `facilito-coords.yml`: ~96 % de los grifos tienen ubicación exacta y nombre comercial. El resto (sobre todo gasocentros solo-GLP) se ubica en la capital de su distrito (`pipeline/data/distritos.csv`) y la app muestra la distancia con "≈".
+- El servidor de Osinergmin responde 403 si la petición no parece de un navegador: el pipeline envía un User-Agent de navegador.
+- La URL lleva el año (`.../SCOP-DOCS/2026/...`); el pipeline usa `{year}` y, si el año nuevo aún no existe, prueba el anterior.
+
+| Código | COD_PRODUCTO Osinergmin | Producto | Unidad |
+|---|---|---|---|
+| `GHR` | 126 | Gasohol Regular | galón |
+| `GHP` | 127 | Gasohol Premium | galón |
+| `DB5` | 40 (Diesel B5 S-50 UV), 39 (Diesel B5 UV) | Diésel B5 (si hay ambos gana el 40) | galón |
+| `GLP` | 49 | GLP – G (granel) | galón |
+| `GNV` | 131 | Gas natural vehicular comprimido | m³ |
+| `REG` / `PREM` | 124 / 125 | Gasolina Regular / Premium | galón |
+| `G84` | 06 | Gasolina 84 | galón |
+| `D2` | 60, 69 | Diésel 2 | galón |
+| `GNL` | 129 | Gas natural licuefactado | kg |
+
 ## Puesta en marcha
 
-### 1. Configurar la fuente de datos
-1. En [datosabiertos.gob.pe](https://www.datosabiertos.gob.pe) busca los datasets de Osinergmin de precios de combustibles por establecimiento y copia la URL de descarga del recurso (CSV/XLSX).
-2. En GitHub: **Settings → Secrets and variables → Actions → Variables** crea:
-   - `PRICES_URL` (obligatoria): URL del archivo de precios.
-   - `REGISTRY_URL` (opcional): registro de establecimientos (grifos/gasocentros) con dirección y coordenadas; se une por código Osinergmin.
-   - `MIN_STATIONS` (opcional, por defecto 100): si se obtienen menos establecimientos, no se publica (protege contra archivos rotos).
-3. Si Osinergmin usa un encabezado distinto, añade el alias en `pipeline/config.yaml` → `columns`.
-
-> ⚠️ Algunos datasets diarios de Osinergmin están **anonimizados** (sin código ni nombre del grifo). Para favoritos se necesita un archivo que identifique al establecimiento (código Osinergmin / nombre / dirección). El pipeline falla con un mensaje claro si no encuentra la columna de código.
-
-### 2. Activar GitHub Pages
-1. Ejecuta el workflow **Precios diarios** manualmente (*Actions → Precios diarios → Run workflow*). Para probar sin fuente real marca **use_sample**.
+### 1. Publicar los datos (GitHub Pages)
+1. Ejecuta el workflow **Precios diarios** (*Actions → Precios diarios → Run workflow*). Ya apunta al Excel EVPC de Osinergmin; no hace falta configurar nada. Luego corre solo 4 veces al día.
 2. **Settings → Pages**: *Deploy from a branch* → `gh-pages` / `root`.
 3. Los datos quedan en `https://xpkevinxp.github.io/Combustible-hoy/latest/meta.json`.
 
-### 3. Compilar la app
+Variables opcionales (*Settings → Secrets and variables → Actions → Variables*):
+- `PRICES_URL`: otra URL de precios.
+- `REGISTRY_URL`: otro archivo con coordenadas por `CODIGO_OSINERG` (columnas `LATITUD`, `LONGITUD`), adicional a `coordenadas.csv`.
+- `MIN_STATIONS` (por defecto 3000): si llegan menos establecimientos, no se publica (protege contra archivos rotos).
+
+### 2. Compilar la app
 ```bash
 cd android
 ./gradlew :app:assembleDebug          # APK en app/build/outputs/apk/debug/
@@ -44,28 +72,41 @@ cd android
 ```
 Requiere JDK 17 y Android SDK 35. El workflow **Android CI** compila y sube el APK como artefacto en cada push.
 
+### 3. Publicar en Google Play
+1. **Keystore (una sola vez, guárdalo en un lugar seguro; si se pierde no podrás actualizar la app):**
+   ```bash
+   keytool -genkeypair -v -keystore combustible-hoy.jks -alias combustiblehoy \
+     -keyalg RSA -keysize 4096 -validity 10000
+   base64 -w0 combustible-hoy.jks > keystore.b64     # en macOS: base64 -i combustible-hoy.jks
+   ```
+2. **Settings → Secrets and variables → Actions → Secrets**: `KEYSTORE_BASE64` (contenido de `keystore.b64`), `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`combustiblehoy`), `KEY_PASSWORD`.
+3. **Versión**: `git tag v1.0.0 && git push origin v1.0.0` → el workflow **Android Release** genera el `.aab` (artefacto, para Play) y un GitHub Release con el `.apk`. `versionCode` = número de ejecución.
+4. **Play Console**: crea la app, activa *Play App Signing* y sube el `.aab`. Textos, declaraciones y gráficos listos en [`store/`](store/ficha-play.md). Política de privacidad: `https://xpkevinxp.github.io/Combustible-hoy/privacidad.html` (se publica desde `docs/` junto con los datos).
+5. Cuentas personales nuevas: prueba cerrada con ≥ 12 testers durante 14 días antes de pedir producción.
+
 ## Formato de datos publicado
 
 | Archivo | Contenido |
 |---|---|
-| `latest/meta.json` | fecha de datos, nº de establecimientos, combustibles, departamentos |
-| `latest/dept/<slug>.json` | grifos de un departamento: nombre, dirección, coordenadas, precios `p`, variación vs. día anterior `d` |
-| `latest/prices.json` | `{id: {combustible: precio}}` de todo el país (para alertas y widget) |
+| `latest/meta.json` | fecha/hora del último registro, nº de establecimientos, combustibles, departamentos |
+| `latest/dept/<slug>.json` | grifos de un departamento: nombre, actividad, dirección, coordenadas (`geo`: exacta/distrito/provincia), precios `p`, variación vs. día anterior `d`, fecha de declaración `u` |
+| `latest/prices.json` | `p`: `{id: {combustible: precio}}` y `u`: `{id: fecha}` de todo el país (alertas y widget) |
 | `history/AAAA-MM-DD/prices.json` | snapshot diario (120 días) |
-
-Códigos de combustible: `REG` Gasolina Regular, `PREM` Gasolina Premium, `G84`, `G90`, `G95`, `G97` Gasohol, `DB5` Diésel B5, `GLP`, `GNV`.
 
 ## Pipeline en local
 ```bash
 cd pipeline
 pip install -r requirements.txt
 python -m pytest -q
-python -m combustible --prices tests/fixtures/precios_largo.csv --registry tests/fixtures/registro.csv --site ../site
+python -m combustible --site ../site          # descarga el Excel real de Osinergmin
+python -m combustible --prices tests/fixtures/evpc_muestra.xlsx --site ../site   # con la muestra
 ```
 
 ## Funciones de la app (MVP)
 - **Widget "Mis grifos"** (redimensionable): favoritos ordenados por precio del combustible elegido, variación ▲▼ y botón de actualizar.
-- **Cercanos**: usa tu ubicación, filtra por radio (2–25 km), ordena por precio o distancia, búsqueda por nombre/distrito, botón "Cómo llegar".
+- **Cercanos**: usa tu ubicación, filtra por radio (2–25 km, distancia aproximada), ordena por precio o distancia, búsqueda por nombre/distrito, botón "Cómo llegar".
 - **Alertas**: sincroniza cada ~6 h y notifica si el precio de tus favoritos cambia más que el umbral (o solo cuando baja).
 
 Los precios son los declarados por los establecimientos y pueden diferir del surtidor.
+
+Ubicación de distritos: [ubigeo-peru-aumentado](https://github.com/jmcastagnetto/ubigeo-peru-aumentado) (MIT).

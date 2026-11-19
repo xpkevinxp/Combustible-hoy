@@ -1,6 +1,7 @@
 """Descarga de archivos fuente (HTTP o ruta local), con reintentos y soporte ZIP."""
 from __future__ import annotations
 
+import datetime as dt
 import io
 import time
 import zipfile
@@ -8,7 +9,30 @@ from pathlib import Path
 
 import requests
 
-USER_AGENT = "combustible-hoy-pipeline/1.0"
+# El servidor de Osinergmin responde 403 a clientes que no parecen navegador.
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/130.0 Safari/537.36 combustible-hoy"
+)
+
+
+def expand(url: str, year: int | None = None) -> str:
+    """Reemplaza {year} en la URL (las carpetas de SCOP van por año: .../SCOP-DOCS/2026/...)."""
+    return url.replace("{year}", str(year or dt.date.today().year))
+
+
+def fetch_dated(url: str, **kw) -> bytes:
+    """Descarga una URL con {year}; si el año actual aún no existe (enero), prueba el anterior."""
+    if "{year}" not in url:
+        return fetch(url, **kw)
+    year = dt.date.today().year
+    try:
+        return fetch(expand(url, year), **kw)
+    except Exception as first:  # noqa: BLE001
+        try:
+            return fetch(expand(url, year - 1), **kw)
+        except Exception:  # noqa: BLE001
+            raise first
 
 
 def fetch(source: str, retries: int = 4, timeout: int = 120) -> bytes:
@@ -20,7 +44,9 @@ def fetch(source: str, retries: int = 4, timeout: int = 120) -> bytes:
         last: Exception | None = None
         for attempt in range(retries):
             try:
-                r = requests.get(source, timeout=timeout, headers={"User-Agent": USER_AGENT})
+                r = requests.get(source, timeout=timeout, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+                if 400 <= r.status_code < 500:
+                    raise RuntimeError(f"HTTP {r.status_code} al descargar {source}")
                 r.raise_for_status()
                 data = r.content
                 break
