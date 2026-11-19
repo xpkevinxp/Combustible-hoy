@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import pe.combustiblehoy.R
+import pe.combustiblehoy.core.Labels
 import pe.combustiblehoy.core.PriceAlerts
 import pe.combustiblehoy.core.PriceChange
 import pe.combustiblehoy.ui.MainActivity
@@ -36,12 +37,12 @@ object Notifications {
 
         val drops = changes.count { it.isDrop }
         val title = when {
-            changes.size == 1 -> changes.first().stationName
+            changes.size == 1 -> Labels.pretty(changes.first().stationName)
             drops == changes.size -> "Bajó el precio en $drops de tus grifos"
             drops == 0 -> "Subió el precio en ${changes.size} de tus grifos"
             else -> "Cambió el precio en ${changes.size} de tus grifos"
         }
-        val lines = changes.map { "${it.stationName}: ${PriceAlerts.describe(it)}" }
+        val lines = changes.map { "${Labels.pretty(it.stationName)}: ${PriceAlerts.describe(it)}" }
         val style = NotificationCompat.InboxStyle().also { s -> lines.take(6).forEach(s::addLine) }
         val intent = PendingIntent.getActivity(
             context, 0,
