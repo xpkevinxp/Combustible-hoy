@@ -9,8 +9,8 @@ from pathlib import Path
 
 import yaml
 
-from .fetch import fetch
-from .normalize import merge_registry, normalize_prices, read_table
+from .fetch import fetch_dated
+from .normalize import geolocate, merge_registry, normalize_prices, read_table
 from .publish import publish
 
 HERE = Path(__file__).resolve().parent.parent
@@ -35,15 +35,17 @@ def main(argv: list[str] | None = None) -> int:
     registry_url = args.registry or os.environ.get("REGISTRY_URL") or src_r.get("url", "")
 
     print(f"Descargando precios: {prices_url}")
-    df = read_table(fetch(prices_url), src_p.get("format", ""), src_p.get("encoding", "utf-8"), src_p.get("delimiter", ""))
+    df = read_table(fetch_dated(prices_url), src_p.get("format", ""), src_p.get("encoding", "utf-8"), src_p.get("delimiter", ""))
     print(f"  {len(df)} filas, columnas: {list(df.columns)}")
     stations = normalize_prices(df, aliases)
     print(f"  {len(stations)} establecimientos con precio")
 
     if registry_url:
         print(f"Descargando registro: {registry_url}")
-        reg = read_table(fetch(registry_url), src_r.get("format", ""), src_r.get("encoding", "utf-8"), src_r.get("delimiter", ""))
+        reg = read_table(fetch_dated(registry_url), src_r.get("format", ""), src_r.get("encoding", "utf-8"), src_r.get("delimiter", ""))
         print(f"  {merge_registry(stations, reg, aliases)} establecimientos completados con el registro")
+
+    print(f"  ubicación: {geolocate(stations)}")
 
     if len(stations) < args.min_stations:
         print(f"ERROR: solo {len(stations)} establecimientos (< {args.min_stations}). No se publica.", file=sys.stderr)

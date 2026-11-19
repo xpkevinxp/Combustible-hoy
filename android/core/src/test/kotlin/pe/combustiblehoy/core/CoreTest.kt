@@ -11,18 +11,23 @@ class CoreTest {
     @Test
     fun parsesPipelineOutput() {
         val meta = DataJson.meta(resource("meta.json"))
-        assertEquals("2026-11-19", meta.date)
-        assertEquals(listOf("junin", "lima"), meta.departments.map { it.slug })
+        assertEquals("2026-11-18T13:36", meta.date)
+        assertEquals(listOf("callao", "cusco", "lima", "ucayali"), meta.departments.map { it.slug })
+        // Todo código publicado por el pipeline existe en la app.
+        assertEquals(emptySet<String>(), meta.fuels.keys - Fuel.entries.map { it.code }.toSet())
 
-        val lima = DataJson.department(resource("lima.json"))
-        val st = lima.stations.single()
-        assertEquals("12345", st.id)
-        assertEquals(15.39, st.price(Fuel.G90)!!, 1e-9)
-        assertNull(st.price(Fuel.G95))
-        assertEquals(LatLon(-12.0912, -77.0251), st.location)
+        val callao = DataJson.department(resource("callao.json"))
+        val st = callao.stations.single()
+        assertEquals("105356", st.id)
+        assertEquals(19.89, st.price(Fuel.GHR)!!, 1e-9)
+        assertNull(st.price(Fuel.GNV))
+        assertEquals(LatLon(-11.8752, -77.1301), st.location)
+        assertEquals(false, st.isLocationApproximate)
+        assertTrue(st.activity.startsWith("ESTACI"))
 
         val prices = DataJson.prices(resource("prices.json"))
-        assertEquals(1.85, prices.p["67890"]!!["GNV"]!!, 1e-9)
+        assertEquals(1.74, prices.p["100155"]!!["GNV"]!!, 1e-9)
+        assertEquals("2026-11-18T13:36", prices.u["105356"])
     }
 
     @Test
@@ -35,7 +40,7 @@ class CoreTest {
     }
 
     private fun st(id: String, price: Double?, lat: Double? = null, lon: Double? = null) =
-        Station(id = id, name = "S$id", lat = lat, lon = lon, prices = price?.let { mapOf("G90" to it) } ?: emptyMap())
+        Station(id = id, name = "S$id", lat = lat, lon = lon, prices = price?.let { mapOf("GHR" to it) } ?: emptyMap())
 
     @Test
     fun rankingByPriceWithinRadius() {
@@ -46,13 +51,13 @@ class CoreTest {
             st("far-cheapest", 14.0, -13.0, -76.0),
             st("no-fuel", null, -12.0912, -77.0251),
         )
-        val r = Ranking.nearby(stations, Fuel.G90, origin, radiusKm = 3.0)
+        val r = Ranking.nearby(stations, Fuel.GHR, origin, radiusKm = 3.0)
         assertEquals(listOf("near-cheap", "near-expensive"), r.map { it.station.id })
 
-        val byDist = Ranking.nearby(stations, Fuel.G90, origin, radiusKm = 3.0, sort = SortMode.DISTANCE)
+        val byDist = Ranking.nearby(stations, Fuel.GHR, origin, radiusKm = 3.0, sort = SortMode.DISTANCE)
         assertEquals("near-expensive", byDist.first().station.id)
 
-        val noGps = Ranking.nearby(stations, Fuel.G90, origin = null)
+        val noGps = Ranking.nearby(stations, Fuel.GHR, origin = null)
         assertEquals("far-cheapest", noGps.first().station.id)
     }
 
@@ -65,27 +70,38 @@ class CoreTest {
     @Test
     fun detectsPriceChangesAboveThreshold() {
         val favs = listOf(
-            FavoriteSnapshot("a", "A", mapOf("G90" to 15.50)),
-            FavoriteSnapshot("b", "B", mapOf("G90" to 15.50)),
-            FavoriteSnapshot("c", "C", mapOf("G90" to 15.50)),
+            FavoriteSnapshot("a", "A", mapOf("GHR" to 15.50)),
+            FavoriteSnapshot("b", "B", mapOf("GHR" to 15.50)),
+            FavoriteSnapshot("c", "C", mapOf("GHR" to 15.50)),
             FavoriteSnapshot("d", "D", mapOf("DB5" to 16.0)),
         )
         val latest = mapOf(
-            "a" to mapOf("G90" to 15.30),
-            "b" to mapOf("G90" to 15.45),
-            "c" to mapOf("G90" to 15.70),
+            "a" to mapOf("GHR" to 15.30),
+            "b" to mapOf("GHR" to 15.45),
+            "c" to mapOf("GHR" to 15.70),
             "d" to mapOf("DB5" to 15.0),
         )
-        val changes = PriceAlerts.detect(favs, latest, Fuel.G90, threshold = 0.10)
+        val changes = PriceAlerts.detect(favs, latest, Fuel.GHR, threshold = 0.10)
         assertEquals(listOf("a", "c"), changes.map { it.stationId })
         assertTrue(changes.first().isDrop)
-        assertEquals(listOf("a"), PriceAlerts.detect(favs, latest, Fuel.G90, onlyDrops = true).map { it.stationId })
-        assertEquals("Gasohol 90 bajó S/ 0.20 → S/ 15.30", PriceAlerts.describe(changes.first()))
+        assertEquals(listOf("a"), PriceAlerts.detect(favs, latest, Fuel.GHR, onlyDrops = true).map { it.stationId })
+        assertEquals("Gasohol Regular bajó S/ 0.20 → S/ 15.30", PriceAlerts.describe(changes.first()))
+    }
+
+    @Test
+    fun formatsDates() {
+        val today = java.time.LocalDate.of(2026, 11, 19)
+        assertEquals("18/11 21:55", Dates.pretty("2026-11-18T21:55", today))
+        assertEquals("20/11/2025", Dates.pretty("2025-11-20T14:36", today))
+        assertEquals("ayer", Dates.age("2026-11-18T21:55", today))
+        assertEquals("hoy", Dates.age("2026-11-19", today))
+        assertEquals("hace 3 días", Dates.age("2026-11-16T22:22", today))
+        assertEquals("", Dates.age("", today))
     }
 
     @Test
     fun favoritePricesRoundTrip() {
-        val m = mapOf("G90" to 15.39, "GLP" to 7.99)
+        val m = mapOf("GHR" to 15.39, "GLP" to 7.99)
         assertEquals(m, DataJson.decodePrices(DataJson.encodePrices(m)))
         assertEquals(emptyMap<String, Double>(), DataJson.decodePrices("not json"))
     }

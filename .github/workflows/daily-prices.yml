@@ -2,13 +2,13 @@ name: Precios diarios
 
 on:
   schedule:
-    # 13:00 UTC = 8:00 am Lima. Segunda corrida por si Osinergmin publica tarde.
-    - cron: "0 13 * * *"
-    - cron: "0 22 * * *"
+    # Osinergmin actualiza el Excel ~cada 6 horas. 1:17, 7:17, 13:17, 19:17 UTC
+    # (= 20:17, 2:17, 8:17, 14:17 hora Lima).
+    - cron: "17 1,7,13,19 * * *"
   workflow_dispatch:
     inputs:
       prices_url:
-        description: "URL del archivo de precios (vacío = variable PRICES_URL del repo)"
+        description: "URL del archivo de precios (vacío = Osinergmin EVPC, ver pipeline/config.yaml)"
         required: false
       use_sample:
         description: "Publicar datos de ejemplo (para probar la app)"
@@ -55,14 +55,10 @@ jobs:
         env:
           PRICES_URL: ${{ inputs.prices_url || vars.PRICES_URL }}
           REGISTRY_URL: ${{ vars.REGISTRY_URL }}
-          MIN_STATIONS: ${{ vars.MIN_STATIONS || '100' }}
+          MIN_STATIONS: ${{ vars.MIN_STATIONS || '3000' }}
         run: |
           if [ "${{ inputs.use_sample }}" = "true" ]; then
-            python -m combustible --site ../site --min-stations 1 \
-              --prices tests/fixtures/precios_largo.csv --registry tests/fixtures/registro.csv
-          elif [ -z "$PRICES_URL" ]; then
-            echo "::error::Configura la variable de repositorio PRICES_URL (Settings > Secrets and variables > Actions > Variables)."
-            exit 1
+            python -m combustible --site ../site --min-stations 1 --prices tests/fixtures/evpc_muestra.xlsx
           else
             python -m combustible --site ../site
           fi

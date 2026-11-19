@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.core.Ranking
 import pe.combustiblehoy.core.SortMode
 import pe.combustiblehoy.data.UserSettings
@@ -82,7 +83,7 @@ fun NearbyScreen(vm: MainViewModel, settings: UserSettings) {
             DepartmentPicker(settings.department, departments) { vm.setDepartment(it) }
             if (state.dataDate.isNotBlank()) {
                 Text(
-                    "  Datos del ${state.dataDate}",
+                    "  Actualizado ${Dates.pretty(state.dataDate)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -127,6 +128,8 @@ fun NearbyScreen(vm: MainViewModel, settings: UserSettings) {
                         price = r.price,
                         delta = st.delta(settings.fuel),
                         distanceKm = r.distanceKm,
+                        updated = st.updated,
+                        approximateDistance = st.isLocationApproximate,
                         isFavorite = st.id in favoriteIds,
                         onToggleFavorite = { vm.toggleFavorite(st) },
                         onDirections = { openDirections(context, st.lat, st.lon, st.name, st.address) },

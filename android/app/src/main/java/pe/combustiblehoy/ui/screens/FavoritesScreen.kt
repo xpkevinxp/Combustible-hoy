@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.data.UserSettings
 import pe.combustiblehoy.data.delta
 import pe.combustiblehoy.data.price
@@ -39,7 +40,7 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                 Text("Mis grifos", style = MaterialTheme.typography.titleLarge)
                 if (settings.lastDataDate.isNotBlank()) {
                     Text(
-                        "Precios declarados al ${settings.lastDataDate}",
+                        "Osinergmin · actualizado ${Dates.pretty(settings.lastDataDate)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -63,6 +64,7 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                         price = fav.price(settings.fuel),
                         delta = fav.delta(settings.fuel),
                         distanceKm = null,
+                        updated = fav.updated,
                         isFavorite = true,
                         onToggleFavorite = { vm.removeFavorite(fav.id) },
                         onDirections = { openDirections(context, fav.lat, fav.lon, fav.name, fav.address) },

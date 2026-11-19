@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.core.Department
 import pe.combustiblehoy.core.Fuel
 import pe.combustiblehoy.core.Geo
@@ -101,18 +102,22 @@ fun StationCard(
     price: Double?,
     delta: Double?,
     distanceKm: Double?,
+    updated: String,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onDirections: (() -> Unit)?,
     highlight: Boolean = false,
+    approximateDistance: Boolean = true,
 ) {
     Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOfNotNull(subtitle.ifBlank { null }, distanceKm?.let { String.format(Locale.US, "%.1f km", it) })
-                        .joinToString(" · "),
+                    listOfNotNull(
+                        subtitle.ifBlank { null },
+                        distanceKm?.let { (if (approximateDistance) "≈ " else "") + String.format(Locale.US, "%.1f km", it) },
+                    ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -128,6 +133,15 @@ fun StationCard(
                     color = if (highlight) PriceDown else MaterialTheme.colorScheme.onSurface,
                 )
                 DeltaText(delta)
+                val age = Dates.age(updated)
+                if (age.isNotBlank()) {
+                    val stale = (Dates.daysAgo(updated) ?: 0L) > 7L
+                    Text(
+                        age,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (stale) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (onDirections != null) {
                 IconButton(onClick = onDirections) { Icon(Icons.Filled.Directions, contentDescription = "Cómo llegar") }
