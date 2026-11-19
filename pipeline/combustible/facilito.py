@@ -62,6 +62,34 @@ def _capture_department(page, code: str, wait_s: float = 25.0) -> list[dict]:
     return captured
 
 
+MAP_URL = "https://www.facilito.gob.pe/facilito/actions/MapaAction.do"
+
+
+def _capture_map(page, code: str, producto: str = "", provincia: str = "9999999", distrito: str = "9999999") -> list[dict]:
+    """Abre el mapa de Facilito (lo que hace irMapa() en la tabla) para todo el departamento."""
+    captured: list[dict] = []
+
+    def on_response(resp):
+        try:
+            if resp.request.resource_type in ("image", "font", "stylesheet", "media") or "facilito.gob.pe" not in resp.url:
+                return
+            captured.append({"url": resp.url, "status": resp.status, "method": resp.request.method,
+                             "ctype": resp.headers.get("content-type", ""), "post": resp.request.post_data,
+                             "body": resp.text()})
+        except Exception:  # noqa: BLE001
+            pass
+
+    url = (f"{MAP_URL}?departamento={code}&provincia={provincia}&distrito={distrito}&producto={producto}"
+           "&method=mostrarMapa&subtitulocabecera=1&tipo=LIQ")
+    page.on("response", on_response)
+    page.goto(url, wait_until="networkidle", timeout=90_000)
+    page.wait_for_timeout(5000)
+    page.remove_listener("response", on_response)
+    captured.append({"url": page.url, "status": 0, "method": "PAGE", "ctype": "text/html", "post": None,
+                     "body": page.content()})
+    return captured
+
+
 def _looks_like_json(text: str) -> bool:
     t = (text or "").lstrip()
     return t[:1] in ("[", "{")
@@ -75,7 +103,8 @@ def discover(code: str, out_dir: Path) -> None:
         browser = p.chromium.launch()
         page = browser.new_page(locale="es-PE")
         try:
-            responses = _capture_department(page, code)
+            _capture_department(page, code)
+            responses = _capture_map(page, code)
         finally:
             browser.close()
     for i, r in enumerate(responses):
@@ -102,7 +131,9 @@ def _print_page_structure(html: str) -> None:
     for m in re.finditer(r"<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>", body, re.I | re.S):
         code = re.sub(r"\s+", " ", m.group(1)).strip()
         if code:
-            print("      SCRIPT", code[:4000])
+            print("      SCRIPT", code[:6000])
+    for m in list(re.finditer(r"-?\d{1,2}\.\d{4,}\s*,\s*-?\d{2}\.\d{4,}", html))[:5]:
+        print("      COORD?", html[max(0, m.start() - 300): m.end() + 300].replace("\n", " "))
 
 
 def main(argv: list[str] | None = None) -> int:
