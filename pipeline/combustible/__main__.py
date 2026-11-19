@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--site", default="site", help="Directorio de salida (raíz de GitHub Pages)")
     ap.add_argument("--min-stations", type=int, default=int(os.environ.get("MIN_STATIONS", "1")),
                     help="Falla si se obtienen menos establecimientos (evita publicar datos rotos)")
+    ap.add_argument("--no-coords", action="store_true", help="No usar data/coordenadas.csv")
     args = ap.parse_args(argv)
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
@@ -33,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
 
     prices_url = args.prices or os.environ.get("PRICES_URL") or src_p.get("url", "")
     registry_url = args.registry or os.environ.get("REGISTRY_URL") or src_r.get("url", "")
+    coords_file = HERE / "data" / "coordenadas.csv"
 
     print(f"Descargando precios: {prices_url}")
     df = read_table(fetch_dated(prices_url), src_p.get("format", ""), src_p.get("encoding", "utf-8"), src_p.get("delimiter", ""))
@@ -44,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Descargando registro: {registry_url}")
         reg = read_table(fetch_dated(registry_url), src_r.get("format", ""), src_r.get("encoding", "utf-8"), src_r.get("delimiter", ""))
         print(f"  {merge_registry(stations, reg, aliases)} establecimientos completados con el registro")
+
+    if coords_file.exists() and not args.no_coords:
+        # Coordenadas exactas de Facilito, actualizadas trimestralmente (facilito-coords.yml).
+        coords = read_table(coords_file.read_bytes(), "csv")
+        print(f"  {merge_registry(stations, coords, aliases)} establecimientos con coordenadas de Facilito")
 
     print(f"  ubicación: {geolocate(stations)}")
 

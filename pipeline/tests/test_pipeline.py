@@ -117,6 +117,6 @@ def test_slug():
 
 
 def test_cli(tmp_path):
-    assert main(["--prices", str(SAMPLE), "--site", str(tmp_path)]) == 0
+    assert main(["--prices", str(SAMPLE), "--site", str(tmp_path), "--no-coords"]) == 0
     assert json.loads((tmp_path / "latest/meta.json").read_text())["count"] == 6
     assert main(["--prices", str(SAMPLE), "--site", str(tmp_path), "--min-stations", "10"]) == 1
