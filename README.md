@@ -15,6 +15,7 @@ Osinergmin (SCOP, Excel) ──► GitHub Actions (cada 6 h) ──► GitHub Pa
 |---|---|
 | `pipeline/` | Proceso en Python: descarga el Excel de Osinergmin, normaliza, ubica por distrito y publica JSON. |
 | `.github/workflows/daily-prices.yml` | Corre el pipeline cada 6 h y publica en la rama `gh-pages`. |
+| `.github/workflows/facilito-coords.yml` | Cada trimestre actualiza las coordenadas exactas desde Facilito (`pipeline/data/coordenadas.csv`). |
 | `android/core/` | Lógica pura en Kotlin (modelos, distancia, ranking, detección de cambios de precio) con tests. |
 | `android/app/` | App Compose + widget Glance + WorkManager (sincronización y notificaciones). |
 
@@ -34,7 +35,7 @@ Cómo se procesa:
 - **Nombre**: `MARCA` casi siempre está vacía, así que se usa la razón social (`RAZON`) + dirección.
 - **Producto**: se mapea por `COD_PRODUCTO` (ver tabla abajo). Se descartan filas con `PRODUCTO_ACTIVO = NO` y los cilindros de GLP de 10 kg.
 - **Fecha**: `FCHA_REGISTRO` es cuándo el grifo declaró ese precio; hay precios de hace meses, por eso la app muestra la antigüedad.
-- **Ubicación**: el Excel **no trae coordenadas**. Se ubica cada grifo en la capital de su distrito (`pipeline/data/distritos.csv`, ubigeo INEI): 99,3 % por distrito y el resto por provincia. Las distancias son aproximadas (se muestran con "≈").
+- **Ubicación**: el Excel **no trae coordenadas**. Se toman del mapa de **Facilito** (`MapaAction.do?method=getPoints`, JSON público), guardadas en `pipeline/data/coordenadas.csv` y actualizadas **cada trimestre** por el workflow `facilito-coords.yml`: ~96 % de los grifos tienen ubicación exacta y nombre comercial. El resto (sobre todo gasocentros solo-GLP) se ubica en la capital de su distrito (`pipeline/data/distritos.csv`) y la app muestra la distancia con "≈".
 - El servidor de Osinergmin responde 403 si la petición no parece de un navegador: el pipeline envía un User-Agent de navegador.
 - La URL lleva el año (`.../SCOP-DOCS/2026/...`); el pipeline usa `{year}` y, si el año nuevo aún no existe, prueba el anterior.
 
@@ -59,7 +60,7 @@ Cómo se procesa:
 
 Variables opcionales (*Settings → Secrets and variables → Actions → Variables*):
 - `PRICES_URL`: otra URL de precios.
-- `REGISTRY_URL`: archivo con coordenadas exactas por `CODIGO_OSINERG` (columnas `LATITUD`, `LONGITUD`); reemplaza la ubicación aproximada.
+- `REGISTRY_URL`: otro archivo con coordenadas por `CODIGO_OSINERG` (columnas `LATITUD`, `LONGITUD`), adicional a `coordenadas.csv`.
 - `MIN_STATIONS` (por defecto 3000): si llegan menos establecimientos, no se publica (protege contra archivos rotos).
 
 ### 2. Compilar la app

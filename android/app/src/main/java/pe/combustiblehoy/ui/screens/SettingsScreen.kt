@@ -63,7 +63,7 @@ fun SettingsScreen(vm: MainViewModel, settings: UserSettings) {
             buildString {
                 append("Fuente: Osinergmin – SCOP, \"Últimos precios registrados\" por los establecimientos de venta al público. ")
                 append("Cada grifo declara su precio; algunos no lo actualizan seguido (se muestra la antigüedad). ")
-                append("La ubicación es aproximada (capital del distrito). Verifica el precio en el surtidor.\n\n")
+                append("La ubicación viene del mapa de Facilito (o es aproximada por distrito si no está). Verifica el precio en el surtidor.\n\n")
                 if (settings.lastDataDate.isNotBlank()) append("Datos al: ${Dates.pretty(settings.lastDataDate)}\n")
                 if (settings.lastSyncAt > 0) {
                     append("Última sincronización: ")

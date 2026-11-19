@@ -141,7 +141,11 @@ def _fill_meta(st: Station, row: pd.Series, cols: dict[str, str]) -> None:
 
     st.company = st.company or g("company")
     st.brand = st.brand or g("brand")
-    st.name = st.name or g("name") or st.brand or st.company
+    name = g("name")  # nombre comercial (p.ej. de Facilito) gana a la razón social
+    if name and (not st.name or st.name in (st.company, st.brand)):
+        st.name = name
+    else:
+        st.name = st.name or st.brand or st.company
     st.ruc = st.ruc or g("ruc")
     st.activity = st.activity or g("activity")
     st.address = st.address or g("address")
