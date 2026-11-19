@@ -4,6 +4,8 @@ on:
   schedule:
     # Trimestral: día 1 de ene/abr/jul/oct a las 9:23 UTC (4:23 hora Lima).
     - cron: "23 9 1 1,4,7,10 *"
+  push:  # TEMPORAL: para probar el scraper; quitar cuando esté listo
+    paths: ["pipeline/combustible/facilito.py", ".github/workflows/facilito-coords.yml"]
   workflow_dispatch:
     inputs:
       discover:
@@ -28,11 +30,11 @@ jobs:
       - run: pip install -r requirements.txt playwright==1.48.0 && python -m playwright install --with-deps chromium
 
       - name: Inspeccionar respuestas de Facilito
-        if: inputs.discover != ''
-        run: python -m combustible.facilito --discover "${{ inputs.discover }}" --dump ../facilito-dump
+        if: inputs.discover != '' || github.event_name == 'push'
+        run: python -m combustible.facilito --discover "${{ inputs.discover || '240000' }}" --dump ../facilito-dump
 
       - uses: actions/upload-artifact@v4
-        if: inputs.discover != ''
+        if: always() && (inputs.discover != '' || github.event_name == 'push')
         with:
           name: facilito-dump
           path: facilito-dump/
