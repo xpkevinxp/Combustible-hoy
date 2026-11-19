@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 // Firma release: variables de entorno (CI, desde GitHub Secrets) o propiedades de Gradle.
@@ -69,8 +70,9 @@ android {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
+// El plugin de Room exporta el esquema por variante sin carreras entre kspDebug y kspRelease.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
