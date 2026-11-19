@@ -49,7 +49,9 @@ def _capture_department(page, code: str, wait_s: float = 25.0) -> list[dict]:
     page.goto(BASE, wait_until="networkidle", timeout=90_000)
     # Espera a que reCAPTCHA haya puesto el token en el formulario.
     page.wait_for_function("document.getElementById('g-recaptcha-response').value.length > 0", timeout=60_000)
-    page.select_option("#departmento", code)
+    # Igual que hacer clic en el departamento del mapa (el <select> solo se ve en móvil).
+    with page.expect_navigation(timeout=90_000):
+        page.evaluate("code => makeAction(code)", code)
     page.wait_for_load_state("networkidle", timeout=90_000)
     deadline = time.time() + wait_s
     while time.time() < deadline and not any(_looks_like_json(c["body"]) for c in captured):
