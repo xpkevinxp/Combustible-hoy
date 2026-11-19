@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Combustible Hoy</string>
+    <string name="widget_name">Mis grifos</string>
+    <string name="widget_description">Precio de tu combustible en tus grifos favoritos</string>
+    <string name="channel_alerts">Alertas de precio</string>
+    <string name="channel_alerts_desc">Avisa cuando cambia el precio en tus grifos favoritos</string>
+</resources>

@@ -1,0 +1,42 @@
+# Configuración del proceso diario de precios.
+#
+# Las URLs se pueden sobrescribir con variables de entorno (útil en GitHub Actions):
+#   PRICES_URL   -> sources.prices.url
+#   REGISTRY_URL -> sources.registry.url
+#
+# IMPORTANTE: verificar la URL vigente del recurso en
+# https://www.datosabiertos.gob.pe (Osinergmin) y el formato de sus columnas.
+# El parser busca las columnas por alias (ver `columns`), así que normalmente
+# basta con añadir un alias si Osinergmin cambia un encabezado.
+
+sources:
+  prices:
+    # CSV / XLSX / JSON con los precios declarados por los establecimientos.
+    url: ""
+    # csv | xlsx | json  (vacío = inferir por extensión)
+    format: ""
+    encoding: "utf-8"      # Osinergmin suele usar latin-1 en CSV antiguos
+    delimiter: ""          # vacío = autodetectar ("," o ";" o "|")
+  registry:
+    # Opcional: registro de establecimientos (grifos / gasocentros) con dirección
+    # y coordenadas. Se une con los precios por código Osinergmin.
+    url: ""
+    format: ""
+    encoding: "utf-8"
+    delimiter: ""
+
+# Alias de columnas (se comparan normalizados: mayúsculas, sin tildes, sin espacios).
+columns:
+  station_id: [CODIGO_OSINERGMIN, COD_OSINERGMIN, CODIGO, REGISTRO, NRO_REGISTRO, CODIGO_REGISTRO, ID_ESTABLECIMIENTO, COD_ESTABLECIMIENTO, LOCAL]
+  name: [NOMBRE_COMERCIAL, NOMBRE_ESTABLECIMIENTO, ESTABLECIMIENTO, NOMBRE]
+  company: [RAZON_SOCIAL, EMPRESA, TITULAR]
+  ruc: [RUC]
+  address: [DIRECCION, DIRECCION_ESTABLECIMIENTO, DOMICILIO]
+  department: [DEPARTAMENTO, DEPARTAMENTO_ESTABLECIMIENTO, REGION, DPTO]
+  province: [PROVINCIA]
+  district: [DISTRITO]
+  lat: [LATITUD, LAT, COORDENADA_Y, Y]
+  lon: [LONGITUD, LON, LNG, COORDENADA_X, X]
+  product: [PRODUCTO, NOMBRE_PRODUCTO, COMBUSTIBLE, DESCRIPCION_PRODUCTO]
+  price: [PRECIO, PRECIO_VENTA, PRECIO_DE_VENTA, PRECIO_SOLES, PRECIO_ACTUAL]
+  date: [FECHA_REGISTRO, FECHA_VIGENCIA, FECHA_PRECIO, FECHA, FECHA_ACTUALIZACION, FECHA_CORTE]
