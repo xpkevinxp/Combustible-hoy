@@ -84,6 +84,25 @@ def discover(code: str, out_dir: Path) -> None:
         print(f"[{i:02d}] {r['method']} {r['status']} {r['ctype']} {r['url']} post={r['post']!r} len={len(r['body'])}")
         if ext == "json":
             print("     ", r["body"][:3000].replace("\n", " "))
+        elif r["method"] in ("PAGE", "POST"):
+            _print_page_structure(r["body"])
+
+
+def _print_page_structure(html: str) -> None:
+    """Imprime formularios, campos, selects y scripts en línea (para entender el flujo)."""
+    import re
+
+    body = html.split("<body", 1)[-1]
+    body = re.sub(r"<area[^>]*>", "", body)
+    for m in re.finditer(r"<(form|input|select|button|a)\b[^>]*>", body, re.I):
+        print("      TAG", re.sub(r"\s+", " ", m.group(0))[:300])
+    for m in re.finditer(r"<select\b.*?</select>", body, re.I | re.S):
+        opts = re.findall(r"<option[^>]*value=[\"']?([^\"'> ]*)[^>]*>([^<]*)", m.group(0), re.I)
+        print("      SELECT opciones:", opts[:15], "..." if len(opts) > 15 else "")
+    for m in re.finditer(r"<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>", body, re.I | re.S):
+        code = re.sub(r"\s+", " ", m.group(1)).strip()
+        if code:
+            print("      SCRIPT", code[:4000])
 
 
 def main(argv: list[str] | None = None) -> int:
