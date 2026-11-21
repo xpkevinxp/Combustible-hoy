@@ -16,4 +16,6 @@
     <color name="widget_text">#FF171D1A</color>
     <color name="widget_text_variant">#FF404944</color>
     <color name="widget_down">#FF1B6C2F</color>
+    <color name="widget_refresh">#FFCEE9DA</color>
+    <color name="widget_on_refresh">#FF092016</color>
 </resources>

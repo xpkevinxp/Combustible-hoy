@@ -1,10 +1,13 @@
 package pe.combustiblehoy.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -22,8 +25,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import pe.combustiblehoy.ui.screens.FavoritesScreen
+import pe.combustiblehoy.ui.screens.LocalSnackbar
 import pe.combustiblehoy.ui.screens.NearbyScreen
 import pe.combustiblehoy.ui.screens.OnboardingScreen
 import pe.combustiblehoy.ui.screens.SettingsScreen
@@ -44,7 +53,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) vm.requestOpenStation(intent?.getStringExtra(EXTRA_STATION_ID))
         setContent { CombustibleTheme { Root(vm) } }
+    }
+
+    // singleTop: si la app ya estaba abierta, el toque en el widget llega aquí.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        vm.requestOpenStation(intent.getStringExtra(EXTRA_STATION_ID))
+    }
+
+    companion object {
+        const val EXTRA_STATION_ID = "station_id"
     }
 }
 
@@ -67,9 +87,14 @@ private fun Root(vm: MainViewModel) {
         return
     }
     var tab by rememberSaveable { mutableIntStateOf(Tab.FAVORITES.ordinal) }
-    // Cada pantalla maneja su barra superior (y el inset de la barra de estado); aquí solo la navegación.
+    val openStation by vm.openStation.collectAsStateWithLifecycle()
+    LaunchedEffect(openStation) { if (openStation != null) tab = Tab.FAVORITES.ordinal }
+    val snackbar = remember { SnackbarHostState() }
+    // Cada pantalla maneja su barra superior (y el inset de la barra de estado); aquí solo la navegación
+    // y el snackbar, que así queda siempre sobre la barra inferior y sobrevive al cambiar de pestaña.
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
                 Tab.entries.forEach { t ->
@@ -83,11 +108,25 @@ private fun Root(vm: MainViewModel) {
             }
         },
     ) { padding ->
-        Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
-            when (Tab.entries[tab]) {
-                Tab.NEARBY -> NearbyScreen(vm, s)
-                Tab.FAVORITES -> FavoritesScreen(vm, s, onAddFavorites = { tab = Tab.NEARBY.ordinal })
-                Tab.SETTINGS -> SettingsScreen(vm, s)
+        CompositionLocalProvider(LocalSnackbar provides snackbar) {
+            // Fundido corto entre pestañas: da continuidad sin retrasar la navegación.
+            Crossfade(
+                targetState = Tab.entries[tab],
+                modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                animationSpec = tween(180),
+                label = "tab",
+            ) { current ->
+                when (current) {
+                    Tab.NEARBY -> NearbyScreen(vm, s, onOpenFavorites = { tab = Tab.FAVORITES.ordinal })
+                    Tab.FAVORITES -> FavoritesScreen(
+                        vm,
+                        s,
+                        onAddFavorites = { tab = Tab.NEARBY.ordinal },
+                        openStationId = openStation,
+                        onStationOpened = vm::consumeOpenStation,
+                    )
+                    Tab.SETTINGS -> SettingsScreen(vm, s)
+                }
             }
         }
     }

@@ -15,6 +15,7 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -72,6 +73,10 @@ private val WidgetColors = ColorProviders(light = BrandLight, dark = BrandDark)
 
 private val UP = DayNightColor(day = Color(0xFFB3261E), night = Color(0xFFFFB4AB))
 private val DOWN = DayNightColor(day = Color(0xFF1B6C2F), night = Color(0xFF9AD7A0))
+private val DOWN_BG = DayNightColor(day = Color(0xFFC6F0C8), night = Color(0xFF0B5321))
+private val ON_DOWN_BG = DayNightColor(day = Color(0xFF002109), night = Color(0xFFC6F0C8))
+private val UP_BG = DayNightColor(day = Color(0xFFFFDAD6), night = Color(0xFF93000A))
+private val ON_UP_BG = DayNightColor(day = Color(0xFF410002), night = Color(0xFFFFDAD6))
 
 /**
  * Widget "Mis grifos". Se adapta al tamaño:
@@ -120,7 +125,7 @@ class FavoritesWidget : GlanceAppWidget() {
                 .fillMaxSize()
                 .appWidgetBackground()
                 .widgetBackground()
-                .padding(horizontal = if (strip) 12.dp else 14.dp, vertical = if (strip) 8.dp else 12.dp)
+                .padding(horizontal = if (strip) 12.dp else 16.dp, vertical = if (strip) 8.dp else 12.dp)
                 .clickable(actionStartActivity<MainActivity>()),
         ) {
             when {
@@ -137,43 +142,52 @@ class FavoritesWidget : GlanceAppWidget() {
     // Layouts
     // -----------------------------------------------------------------------------------------
 
+    /** 1 fila de alto: combustible · grifo más barato · precio con flecha de cambio. */
     @Composable
     private fun Strip(state: WidgetState) {
         val row = state.best ?: state.rows.first()
-        Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+        Row(GlanceModifier.fillMaxSize().clickable(openStation(row.id)), verticalAlignment = Alignment.CenterVertically) {
             FuelBadge(state.fuel, short = true)
             Spacer(GlanceModifier.width(8.dp))
             Column(GlanceModifier.defaultWeight()) {
                 Text(row.name, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-                if (row.district.isNotBlank()) {
-                    Text(row.district, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
-                }
+                Text(
+                    if (state.rows.size > 1) "Más barato hoy" else row.district,
+                    style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
+                    maxLines = 1,
+                )
             }
             Spacer(GlanceModifier.width(8.dp))
-            Price(row.price, big = 18.sp, color = GlanceTheme.colors.primary)
+            Column(horizontalAlignment = Alignment.End) {
+                Price(row.price, big = 20.sp, color = GlanceTheme.colors.primary)
+                ChangeText(row.delta)
+            }
         }
     }
 
+    /** 2×2: una sola cifra protagonista, el cambio debajo y el nombre del grifo. */
     @Composable
     private fun Hero(state: WidgetState, showOthers: Boolean) {
         val best = state.best ?: state.rows.first()
-        Column(GlanceModifier.fillMaxSize()) {
+        Column(GlanceModifier.fillMaxSize().clickable(openStation(best.id))) {
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 FuelBadge(state.fuel, short = true)
                 Spacer(GlanceModifier.defaultWeight())
                 RefreshButton()
             }
-            Spacer(GlanceModifier.height(6.dp))
+            Spacer(GlanceModifier.height(8.dp))
             Text(
-                if (state.rows.size > 1) "Más barato" else "Precio hoy",
-                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
+                if (state.rows.size > 1) "Más barato hoy" else "Precio hoy",
+                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium),
                 maxLines = 1,
             )
-            Price(best.price, big = 24.sp, color = GlanceTheme.colors.primary)
+            Price(best.price, big = 28.sp, color = GlanceTheme.colors.primary)
+            ChangeChip(best.price, best.delta, withBefore = false)
+            Spacer(GlanceModifier.height(4.dp))
             Text(
                 best.name,
                 style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 12.sp, fontWeight = FontWeight.Medium),
-                maxLines = 2,
+                maxLines = if (showOthers) 1 else 2,
             )
             if (showOthers) {
                 // Columna propia: Glance admite como máximo 10 hijos por contenedor.
@@ -195,12 +209,17 @@ class FavoritesWidget : GlanceAppWidget() {
                 Spacer(GlanceModifier.defaultWeight())
                 RefreshButton()
             }
-            Spacer(GlanceModifier.height(6.dp))
+            Spacer(GlanceModifier.height(8.dp))
             if (scrollable) {
+                val best = state.best
+                if (best != null) {
+                    BestCard(best, state)
+                    Spacer(GlanceModifier.height(8.dp))
+                }
                 LazyColumn(GlanceModifier.defaultWeight().fillMaxWidth()) {
-                    items(state.rows, itemId = { it.id.hashCode().toLong() }) { row ->
+                    items(state.rows.filter { it.id != best?.id }, itemId = { it.id.hashCode().toLong() }) { row ->
                         Column {
-                            FullRow(row, highlight = row.id == bestId)
+                            FullRow(row)
                             Spacer(GlanceModifier.height(4.dp))
                         }
                     }
@@ -216,6 +235,38 @@ class FavoritesWidget : GlanceAppWidget() {
         }
     }
 
+    /** Tarjeta protagonista del widget grande: precio, cambio y cuánto se ahorra frente al más caro. */
+    @Composable
+    private fun BestCard(best: WidgetRow, state: WidgetState) {
+        val fg = GlanceTheme.colors.onPrimaryContainer
+        val maxPrice = state.rows.mapNotNull { it.price }.maxOrNull()
+        val saving = if (best.price != null && maxPrice != null) maxPrice - best.price else 0.0
+        Column(
+            GlanceModifier.fillMaxWidth().cornerRadius(16.dp).background(GlanceTheme.colors.primaryContainer)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clickable(openStation(best.id)),
+        ) {
+            Text(
+                if (state.rows.size > 1) "MÁS BARATO HOY" else "PRECIO HOY",
+                style = TextStyle(color = fg, fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Price(best.price, big = 26.sp, color = fg)
+                Spacer(GlanceModifier.defaultWeight())
+                ChangeChip(best.price, best.delta, withBefore = true)
+            }
+            Text(best.name, style = TextStyle(color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+            if (saving >= 0.01) {
+                Text(
+                    "Ahorras S/ ${fmt(saving)} por ${state.fuel.unit} vs el más caro",
+                    style = TextStyle(color = fg, fontSize = 11.sp),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+
     @Composable
     private fun Empty(compact: Boolean) {
         Column(
@@ -225,14 +276,14 @@ class FavoritesWidget : GlanceAppWidget() {
         ) {
             if (!compact) {
                 Box(
-                    GlanceModifier.size(40.dp).cornerRadius(20.dp).background(GlanceTheme.colors.primaryContainer),
+                    GlanceModifier.size(48.dp).cornerRadius(24.dp).background(GlanceTheme.colors.primaryContainer),
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
                         provider = ImageProvider(R.drawable.ic_fuel),
                         contentDescription = null,
                         colorFilter = ColorFilter.tint(GlanceTheme.colors.onPrimaryContainer),
-                        modifier = GlanceModifier.size(22.dp),
+                        modifier = GlanceModifier.size(24.dp),
                     )
                 }
                 Spacer(GlanceModifier.height(8.dp))
@@ -254,51 +305,55 @@ class FavoritesWidget : GlanceAppWidget() {
     // Piezas
     // -----------------------------------------------------------------------------------------
 
-    /** Fila de 1 línea: nombre + precio. El más barato va sobre fondo de color. */
+    /** Fila de 1 línea: nombre + precio (+ flecha de cambio). El más barato va sobre fondo de color. */
     @Composable
     private fun CompactRow(row: WidgetRow, highlight: Boolean, small: Boolean) {
         Row(
             GlanceModifier.fillMaxWidth()
-                .then(if (highlight) GlanceModifier.cornerRadius(10.dp).background(GlanceTheme.colors.primaryContainer) else GlanceModifier)
-                .padding(horizontal = if (highlight) 8.dp else 0.dp, vertical = if (small) 2.dp else 5.dp),
+                .then(if (highlight) GlanceModifier.cornerRadius(12.dp).background(GlanceTheme.colors.primaryContainer) else GlanceModifier)
+                .padding(horizontal = if (highlight) 8.dp else 0.dp, vertical = if (small) 2.dp else 4.dp)
+                .clickable(openStation(row.id)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val fg = if (highlight) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurface
             Text(
                 row.name,
-                style = TextStyle(color = fg, fontSize = if (small) 11.sp else 13.sp),
+                style = TextStyle(color = fg, fontSize = if (small) 11.sp else 13.sp, fontWeight = if (highlight) FontWeight.Medium else FontWeight.Normal),
                 maxLines = 1,
                 modifier = GlanceModifier.defaultWeight(),
             )
-            Spacer(GlanceModifier.width(6.dp))
+            Spacer(GlanceModifier.width(8.dp))
+            if (!small) {
+                ChangeText(row.delta)
+                Spacer(GlanceModifier.width(4.dp))
+            }
             Price(row.price, big = if (small) 12.sp else 15.sp, color = fg, symbol = !small)
         }
     }
 
-    /** Fila de 2 líneas: nombre/distrito a la izquierda, precio/variación a la derecha. */
+    /** Fila de 2 líneas: nombre/distrito y precio anterior a la izquierda; precio y cambio a la derecha. */
     @Composable
-    private fun FullRow(row: WidgetRow, highlight: Boolean) {
-        val fg = if (highlight) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurface
-        val fgVariant = if (highlight) GlanceTheme.colors.onPrimaryContainer else GlanceTheme.colors.onSurfaceVariant
+    private fun FullRow(row: WidgetRow) {
         Row(
             GlanceModifier.fillMaxWidth()
                 .cornerRadius(12.dp)
-                .background(if (highlight) GlanceTheme.colors.primaryContainer else GlanceTheme.colors.surfaceVariant)
-                .padding(horizontal = 10.dp, vertical = 7.dp)
-                .clickable(actionStartActivity<MainActivity>()),
+                .background(GlanceTheme.colors.surfaceVariant)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .clickable(openStation(row.id)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(GlanceModifier.defaultWeight()) {
-                Text(row.name, style = TextStyle(color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-                val sub = listOfNotNull(if (highlight) "Más barato" else null, row.district.ifBlank { null }).joinToString(" · ")
+                Text(row.name, style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+                val prev = before(row.price, row.delta)
+                val sub = listOfNotNull(row.district.ifBlank { null }, prev?.let { "antes S/ ${fmt(it)}" }).joinToString(" · ")
                 if (sub.isNotBlank()) {
-                    Text(sub, style = TextStyle(color = fgVariant, fontSize = 11.sp), maxLines = 1)
+                    Text(sub, style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp), maxLines = 1)
                 }
             }
             Spacer(GlanceModifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
-                Price(row.price, big = 16.sp, color = fg)
-                Delta(row.delta)
+                Price(row.price, big = 16.sp, color = GlanceTheme.colors.onSurface)
+                ChangeText(row.delta)
             }
         }
     }
@@ -314,28 +369,42 @@ class FavoritesWidget : GlanceAppWidget() {
                 Text("S/", style = TextStyle(color = color, fontSize = (big.value * 0.55f).sp, fontWeight = FontWeight.Medium))
                 Spacer(GlanceModifier.width(2.dp))
             }
-            Text(
-                String.format(Locale.US, "%.2f", price),
-                style = TextStyle(color = color, fontSize = big, fontWeight = FontWeight.Bold),
-                maxLines = 1,
-            )
+            Text(fmt(price), style = TextStyle(color = color, fontSize = big, fontWeight = FontWeight.Bold), maxLines = 1)
         }
     }
 
+    /** Texto corto de cambio, coloreado: "▼0.30". */
     @Composable
-    private fun Delta(delta: Double?) {
+    private fun ChangeText(delta: Double?) {
         if (delta == null || abs(delta) < 0.005) return
         val down = delta < 0
         Text(
-            (if (down) "▼ " else "▲ ") + String.format(Locale.US, "%.2f", abs(delta)),
-            style = TextStyle(color = if (down) DOWN else UP, fontSize = 11.sp, fontWeight = FontWeight.Medium),
+            (if (down) "▼" else "▲") + fmt(abs(delta)),
+            style = TextStyle(color = if (down) DOWN else UP, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
         )
+    }
+
+    /** Pastilla de cambio sobre fondo suave: "▼ 0.30 · antes 16.19". */
+    @Composable
+    private fun ChangeChip(price: Double?, delta: Double?, withBefore: Boolean) {
+        if (delta == null || abs(delta) < 0.005) return
+        val down = delta < 0
+        val text = buildString {
+            append(if (down) "▼ " else "▲ ").append(fmt(abs(delta)))
+            if (withBefore) before(price, delta)?.let { append(" · antes ").append(fmt(it)) }
+        }
+        Box(
+            GlanceModifier.cornerRadius(12.dp).background(if (down) DOWN_BG else UP_BG).padding(horizontal = 8.dp, vertical = 2.dp),
+        ) {
+            Text(text, style = TextStyle(color = if (down) ON_DOWN_BG else ON_UP_BG, fontSize = 11.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+        }
     }
 
     @Composable
     private fun FuelBadge(fuel: Fuel, short: Boolean) {
         Row(
-            GlanceModifier.cornerRadius(12.dp).background(GlanceTheme.colors.primary).padding(start = 6.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
+            GlanceModifier.cornerRadius(12.dp).background(GlanceTheme.colors.primary).padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Image(
@@ -353,11 +422,11 @@ class FavoritesWidget : GlanceAppWidget() {
         }
     }
 
-    /** Botón circular de 30 dp con fondo (antes era un ícono suelto de 20 dp, difícil de acertar). */
+    /** Botón circular de 32 dp con fondo: objetivo táctil claro. */
     @Composable
     private fun RefreshButton() {
         Box(
-            GlanceModifier.size(30.dp).cornerRadius(15.dp).background(GlanceTheme.colors.secondaryContainer)
+            GlanceModifier.size(32.dp).cornerRadius(16.dp).background(GlanceTheme.colors.secondaryContainer)
                 .clickable(actionRunCallback<RefreshAction>()),
             contentAlignment = Alignment.Center,
         ) {
@@ -377,7 +446,7 @@ class FavoritesWidget : GlanceAppWidget() {
         val parts = listOfNotNull(
             if (more > 0) "+$more más" else null,
             state.date.takeIf { it.isNotBlank() }?.let {
-                (if (stale) "⚠ " else "") + (if (showSource) "Osinergmin · " else "") + Dates.pretty(it)
+                (if (stale) "⚠ " else "Actualizado ") + Dates.pretty(it) + (if (showSource) " · Osinergmin" else "")
             },
         )
         Text(
@@ -396,6 +465,16 @@ class FavoritesWidget : GlanceAppWidget() {
             background(ImageProvider(R.drawable.widget_background))
         }
 }
+
+private val StationKey = ActionParameters.Key<String>(MainActivity.EXTRA_STATION_ID)
+
+/** Abre la app directo en el detalle del grifo tocado. */
+private fun openStation(id: String) = actionStartActivity<MainActivity>(actionParametersOf(StationKey to id))
+
+private fun fmt(v: Double): String = String.format(Locale.US, "%.2f", v)
+
+private fun before(price: Double?, delta: Double?): Double? =
+    if (price == null || delta == null || abs(delta) < 0.005) null else price - delta
 
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {

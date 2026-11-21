@@ -83,6 +83,8 @@ class PriceRepository(
 
     suspend fun addFavorite(st: Station) = db.favorites().upsert(FavoriteEntity.from(st))
     suspend fun removeFavorite(id: String) = db.favorites().delete(id)
+    /** Deshacer: reinserta el favorito tal cual estaba (mismo orden y últimos precios). */
+    suspend fun restoreFavorite(fav: FavoriteEntity) = db.favorites().upsert(fav)
 
     /**
      * Sincronización diaria (WorkManager o manual): si hay datos nuevos actualiza favoritos

@@ -11,4 +11,6 @@
     <color name="widget_text">#FFDEE4E0</color>
     <color name="widget_text_variant">#FFBFC9C2</color>
     <color name="widget_down">#FF9AD7A0</color>
+    <color name="widget_refresh">#FF354B41</color>
+    <color name="widget_on_refresh">#FFCEE9DA</color>
 </resources>
