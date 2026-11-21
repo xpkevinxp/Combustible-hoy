@@ -10,13 +10,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Widgets
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -26,6 +26,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -34,18 +36,27 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import pe.combustiblehoy.core.DataJson
 import pe.combustiblehoy.core.Dates
 import pe.combustiblehoy.core.Labels
 import pe.combustiblehoy.data.FavoriteEntity
 import pe.combustiblehoy.data.UserSettings
 import pe.combustiblehoy.data.delta
 import pe.combustiblehoy.data.price
+import pe.combustiblehoy.data.prices
 import pe.combustiblehoy.ui.MainViewModel
 import pe.combustiblehoy.widget.FavoritesWidgetReceiver
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: () -> Unit) {
+fun FavoritesScreen(
+    vm: MainViewModel,
+    settings: UserSettings,
+    onAddFavorites: () -> Unit,
+    openStationId: String? = null,
+    onStationOpened: () -> Unit = {},
+) {
     val context = LocalContext.current
     val favorites by vm.favorites.collectAsStateWithLifecycle()
     val fuel = settings.fuel
@@ -60,6 +71,30 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
     LaunchedEffect(refreshing) { if (refreshing) { delay(6_000); refreshing = false } }
     LaunchedEffect(settings.lastSyncAt) { refreshing = false }
     val refresh: () -> Unit = { refreshing = true; vm.refreshAll() }
+
+    val snackbar = LocalSnackbar.current
+    val scope = rememberCoroutineScope()
+    // Quitar es inmediato (sin diálogos), pero reversible: patrón "deshacer" en vez de confirmar.
+    val remove: (FavoriteEntity) -> Unit = { fav ->
+        vm.removeFavorite(fav.id)
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val result = snackbar.showSnackbar(
+                "Quitaste ${Labels.pretty(fav.name)}",
+                actionLabel = "Deshacer",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) vm.restoreFavorite(fav)
+        }
+    }
+    var detailId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Llegada desde el widget: abre el detalle del grifo tocado.
+    LaunchedEffect(openStationId) {
+        if (openStationId != null) { detailId = openStationId; onStationOpened() }
+    }
+    val drops = remember(favorites, fuel) {
+        favorites.mapNotNull { f -> f.delta(fuel)?.takeIf { it <= -0.005 }?.let { f to -it } }
+    }
 
     var hasWidget by remember { mutableStateOf(true) }
     LifecycleResumeEffect(Unit) {
@@ -87,19 +122,26 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                         )
                     }
                 }
-                item(key = "fuel") { FuelSelector(fuel, vm::setFuel, Modifier.padding(vertical = 8.dp)) }
+                if (sorted.isNotEmpty()) {
+                    item(key = "fuel") { FuelSelector(fuel, vm::setFuel, Modifier.padding(vertical = 8.dp)) }
+                }
 
                 if (sorted.isEmpty()) {
                     item(key = "empty") {
-                        EmptyState(
-                            icon = Icons.Outlined.StarOutline,
-                            title = "Guarda tus grifos",
-                            body = "Busca en Cercanos y toca la estrella de los grifos donde cargas. " +
-                                "Verás aquí cuál está más barato hoy, y también en el widget de tu pantalla de inicio.",
-                            action = { Button(onClick = onAddFavorites) { Text("Buscar grifos cercanos") } },
+                        GettingStarted(
+                            onSearch = onAddFavorites,
+                            onAddWidget = if (!hasWidget && canPinWidget(context)) {
+                                { requestPinWidget(context) }
+                            } else {
+                                null
+                            },
                         )
                     }
                     return@LazyColumn
+                }
+
+                drops.maxByOrNull { it.second }?.let { (fav, amountDown) ->
+                    item(key = "drops") { DropsBanner(drops.size, amountDown, fav.name) }
                 }
 
                 best?.let { b ->
@@ -112,6 +154,8 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                             maxPrice = maxPrice.takeIf { sorted.size > 1 },
                             caption = if (sorted.size > 1) "Mejor precio en tus grifos" else "Precio hoy",
                             onDirections = { openDirections(context, b.lat, b.lon, b.name, b.address) },
+                            onClick = { detailId = b.id },
+                            delta = b.delta(fuel),
                         )
                     }
                 }
@@ -138,14 +182,35 @@ fun FavoritesScreen(vm: MainViewModel, settings: UserSettings, onAddFavorites: (
                         distanceKm = null,
                         updated = fav.updated,
                         isFavorite = true,
-                        onToggleFavorite = { vm.removeFavorite(fav.id) },
+                        onToggleFavorite = { remove(fav) },
                         onDirections = { openDirections(context, fav.lat, fav.lon, fav.name, fav.address) },
                         best = sorted.size > 1 && fav.id == best?.id,
                         modifier = Modifier.animateItem(),
+                        onClick = { detailId = fav.id },
                     )
                 }
             }
         }
+    }
+
+    favorites.firstOrNull { it.id == detailId }?.let { fav ->
+        StationSheet(
+            info = StationInfo(
+                id = fav.id,
+                name = fav.name,
+                address = fav.address,
+                district = fav.district,
+                lat = fav.lat,
+                lon = fav.lon,
+                prices = fav.prices(),
+                deltas = DataJson.decodePrices(fav.deltasJson),
+                updated = fav.updated,
+            ),
+            selectedFuel = fuel,
+            isFavorite = true,
+            onToggleFavorite = { detailId = null; remove(fav) },
+            onDismiss = { detailId = null },
+        )
     }
 }
 

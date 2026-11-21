@@ -53,6 +53,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _location = MutableStateFlow<LatLon?>(null)
     val location: StateFlow<LatLon?> = _location.asStateFlow()
 
+    /** Grifo a mostrar en detalle al abrir la app desde el widget. */
+    private val _openStation = MutableStateFlow<String?>(null)
+    val openStation: StateFlow<String?> = _openStation.asStateFlow()
+    fun requestOpenStation(id: String?) { if (id != null) _openStation.value = id }
+    fun consumeOpenStation() { _openStation.value = null }
+
     init {
         viewModelScope.launch {
             _departments.value = repo.meta()?.departments.orEmpty()
@@ -102,6 +108,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeFavorite(id: String) = viewModelScope.launch {
         repo.removeFavorite(id)
+        FavoritesWidget.refreshAll(ctx)
+    }
+
+    fun restoreFavorite(fav: FavoriteEntity) = viewModelScope.launch {
+        repo.restoreFavorite(fav)
         FavoritesWidget.refreshAll(ctx)
     }
 
