@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 /site/
 .DS_Store
+
+# Herramientas locales de agentes (skills instaladas), no son parte de la app
+.agents/
+skills-lock.json
